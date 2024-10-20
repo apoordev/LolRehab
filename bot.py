@@ -3,19 +3,19 @@ from dotenv import load_dotenv
 from datetime import datetime, time, timedelta
 import asyncio
 import discord
-from discord.ext import commands
 from requests.exceptions import HTTPError
 from riotwatcher import RiotWatcher, LolWatcher
 
 load_dotenv()
 DISCORDT = os.getenv('DISCORD_TOKEN')
 RIOTT = os.getenv('RIOT_TOKEN')
-guild_id = os.getenv('GUILDID')
-channel_id = os.getenv('CHANNELID')
+guild_id = int(os.getenv('GUILDID'))
+channel_id = int(os.getenv('CHANNELID'))
 lol_watcher = LolWatcher(RIOTT)
 riot_watcher = RiotWatcher(RIOTT)
+region = 'AMERICAS'
 
-bot = discord.Client(intents=discord.Intents.default())
+bot = discord.Client(intents=discord.Intents.all())
 
 @bot.event
 async def on_ready():
@@ -24,10 +24,18 @@ async def on_ready():
     print(bot.user.id)
     print('------')
 
+@bot.event
+async def on_message(message):
+    # Ignore messages made by the bot
+    if(message.author == bot.user):
+        return
+    if message.content == '!daily':
+        await called_once_a_day()
+
 async def called_once_a_day():  # Fired every day
     await bot.wait_until_ready()  # Make sure your guild cache is ready so the channel can be found via get_channel
     try:
-        player = riot_watcher.account.by_riot_id('AMERICAS', 'ImaHitGold2024Ok', 'Gay')
+        player = riot_watcher.account.by_riot_id(region, 'ImaHitGold2024Ok', 'Gay')
     except HTTPError as err:
         if err.response.status_code == 429:
             print('We should retry in {} seconds.'.format(err.response.headers['Retry-After']))
@@ -40,8 +48,35 @@ async def called_once_a_day():  # Fired every day
             quit()
         else:
             raise
-    channel = bot.bot.get_guild(guild_id).get_channel(channel_id) # Note: It's more efficient to do bot.get_guild(guild_id).get_channel(channel_id) as there's less looping involved, but just get_channel still works fine
-    await channel.send(player.gameName)
+    puuid = player['puuid']
+    now = datetime.now()
+    past_24_hours = now - timedelta(hours=24)
+    # Get match IDs for the past 24 hours
+    match_ids = lol_watcher.match.matchlist_by_puuid(region, puuid, start_time=int(past_24_hours.timestamp()))
+    # Fetch and process each match
+    performance_summary = []
+    for match_id in match_ids:
+        match_detail = lol_watcher.match.by_id(region, match_id)
+
+        # Find the player in the match
+        for participant in match_detail['info']['participants']:
+            if participant['puuid'] == puuid:
+                champion = participant['championName']
+                kills = participant['kills']
+                deaths = participant['deaths']
+                assists = participant['assists']
+                win = participant['win']
+
+                performance_summary.append(f"Champion: {champion}, K/D/A: {kills}/{deaths}/{assists}, Result: {'Win' if win else 'Loss'}")
+                break
+
+    # Prepare the performance message
+    if performance_summary:
+        performance_message = f"Player's performance in the last 24 hours:\n" + "\n".join(performance_summary)
+    else:
+        performance_message = "No games played in the last 24 hours." 
+    channel = bot.get_guild(guild_id).get_channel(channel_id)
+    await channel.send(performance_message)
 
 async def background_task():
     now = datetime.utcnow()
