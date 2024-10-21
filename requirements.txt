@@ -1,4 +1,5 @@
 discord.py
 riotwatcher
 python-dotenv
+matplotlib
 ollama
