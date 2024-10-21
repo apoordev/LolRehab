@@ -30,7 +30,7 @@ async def on_ready():
     print(bot.user.id)
     print('------')
     print('Starting background task...')
-    bot.loop.create_task(background_task())
+    bot.loop.create_task(background_task())  # Start the background task when the bot is ready
 
 @bot.event
 async def on_message(message):
@@ -67,12 +67,22 @@ async def called_once_a_day():  # Fired every day
                     deaths = participant['deaths']
                     assists = participant['assists']
                     win = participant['win']
+                    cs = participant['totalMinionsKilled'] + participant['neutralMinionsKilled']
+                    vision_score = participant['visionScore']
+                    game_duration = match_detail['info']['gameDuration'] // 60  # Convert to minutes
 
-                    performance_summary.append(f"Champion: {champion}, K/D/A: {kills}/{deaths}/{assists}, Result: {'Win' if win else 'Loss'}")
+                    performance_summary.append(
+                        f"```md\n"
+                        f"# {champion} - {'Victory' if win else 'Defeat'} ({game_duration} min)\n"
+                        f"## KDA: {kills}/{deaths}/{assists} ({((kills + assists) / max(1, deaths)):.2f})\n"
+                        f"* CS: {cs} ({cs / game_duration:.1f}/min)\n"
+                        f"* Vision Score: {vision_score}\n"
+                        f"```"
+                    )
                     break
 
     if performance_summary:
-        performance_message = f"{player['gameName']}'s performance in the last 24 hours (games longer than 10 minutes):\n" + "\n".join(performance_summary)
+        performance_message = f"**{player['gameName']}'s performance in the last 24 hours (games longer than 10 minutes):**\n" + "\n".join(performance_summary)
     else:
         performance_message = "No games longer than 10 minutes played in the last 24 hours."
 
@@ -84,7 +94,8 @@ async def called_once_a_day():  # Fired every day
     ])
 
     channel = bot.get_guild(guild_id).get_channel(channel_id)
-    await channel.send("\n"+performance_message+"\n"+response['message']['content'])
+    await channel.send(performance_message)
+    await channel.send(response['message']['content'])
 
 async def called_once_a_month():  # Fired once a month
     await bot.wait_until_ready()
@@ -137,7 +148,7 @@ async def background_task():
     await bot.wait_until_ready()
     while not bot.is_closed():
         now = datetime.utcnow()
-        WHEN = time(hour=0, minute=0, second=0)  # 12:00 AM UTC 8:00 PM EST
+        WHEN = time(hour=0, minute=0, second=0)  # 6:00 PM UTC
         if now.time() > WHEN:
             tomorrow = datetime.combine(now.date() + timedelta(days=1), time(0))
             seconds = (tomorrow - now).total_seconds()
