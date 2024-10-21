@@ -5,6 +5,7 @@ import asyncio
 import discord
 from requests.exceptions import HTTPError
 from riotwatcher import RiotWatcher, LolWatcher
+from ollama import Client
 
 load_dotenv()
 DISCORDT = os.getenv('DISCORD_TOKEN')
@@ -14,6 +15,8 @@ channel_id = int(os.getenv('CHANNELID'))
 lol_watcher = LolWatcher(RIOTT)
 riot_watcher = RiotWatcher(RIOTT)
 region = 'AMERICAS'
+
+ollclient = Client(host=os.getenv('OLLAMA_HOST'))
 
 bot = discord.Client(intents=discord.Intents.all())
 
@@ -71,13 +74,21 @@ async def called_once_a_day():  # Fired every day
                     performance_summary.append(f"Champion: {champion}, K/D/A: {kills}/{deaths}/{assists}, Result: {'Win' if win else 'Loss'}")
                     break
 
-    # Prepare the performance message
     if performance_summary:
         performance_message = f"{player['gameName']}'s performance in the last 24 hours:\n" + "\n".join(performance_summary)
     else:
         performance_message = "No games played in the last 24 hours."
+
+    response = ollclient.chat(model='llama3.1', messages=[
+        {
+            'role': 'user',
+            'content': 'Summarize the following League of Legends statistics:\n'+performance_message,
+        },
+    ])
+
+    print(response)
     channel = bot.get_guild(guild_id).get_channel(channel_id)
-    await channel.send(performance_message)
+    await channel.send(performance_message+"\n"+response['message']['content'])
 
 async def background_task():
     now = datetime.utcnow()

@@ -1,3 +1,4 @@
 discord.py
 riotwatcher
 python-dotenv
+ollama
