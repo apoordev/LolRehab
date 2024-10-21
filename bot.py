@@ -41,17 +41,8 @@ async def called_once_a_day():  # Fired every day
     try:
         player = riot_watcher.account.by_riot_id(region, 'ImaHitGold2024Ok', 'Gay')
     except HTTPError as err:
-        if err.response.status_code == 429:
-            print('We should retry in {} seconds.'.format(err.response.headers['Retry-After']))
-            print('this retry-after is handled by default by the RiotWatcher library')
-            print('future requests wait until the retry-after time passes')
-        elif err.response.status_code == 404:
-            print('Summoner with that ridiculous name not found.')
-        elif err.response.status_code == 400:
-            print('Something with the API is broken')
-            quit()
-        else:
-            raise
+        print(f"Error fetching player data: {err}")
+        return
 
     past_24_hours = datetime.now() - timedelta(hours=24)
     # Get match IDs for the past 24 hours
