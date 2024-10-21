@@ -13,7 +13,7 @@ DISCORDT = os.getenv('DISCORD_TOKEN')
 RIOTT = os.getenv('RIOT_TOKEN')
 guild_id = int(os.getenv('GUILDID'))
 channel_id = int(os.getenv('CHANNELID'))
-user_id = (os.getenv('USER')).split('#')
+user_id = os.getenv('LOLUSER').split('#')
 lol_watcher = LolWatcher(RIOTT)
 riot_watcher = RiotWatcher(RIOTT)
 region = 'AMERICAS'
@@ -29,6 +29,8 @@ async def on_ready():
     print(bot.user.name)
     print(bot.user.id)
     print('------')
+    print('Starting background task...')
+    bot.loop.create_task(background_task())
 
 @bot.event
 async def on_message(message):
@@ -43,7 +45,7 @@ async def on_message(message):
 async def called_once_a_day():  # Fired every day
     await bot.wait_until_ready()  # Make sure your guild cache is ready so the channel can be found via get_channel
     try:
-        player = riot_watcher.account.by_riot_id(region, "user_id[0]", "user_id[1]")
+        player = riot_watcher.account.by_riot_id(region, user_id[0], user_id[1])
     except HTTPError as err:
         return print(f"Error fetching player data: {err}")
 
@@ -87,7 +89,7 @@ async def called_once_a_day():  # Fired every day
 async def called_once_a_month():  # Fired once a month
     await bot.wait_until_ready()
     try:
-        player = riot_watcher.account.by_riot_id(region, 'user_id[0]', 'user_id[1]')
+        player = riot_watcher.account.by_riot_id(region, user_id[0], user_id[1])
     except HTTPError as err:
         return print(f"Error fetching player data: {err}")
 
@@ -132,22 +134,19 @@ async def called_once_a_month():  # Fired once a month
         await channel.send(f"{player['gameName']} is not ranked in Solo/Duo queue.")
 
 async def background_task():
-    now = datetime.utcnow()
-    WHEN = time(hour=18, minute=0, second=0)  # 6:00 PM UTC
-    if now.time() > WHEN:  # Make sure loop doesn't start after {WHEN} as then it will send immediately the first time as negative seconds will make the sleep yield instantly
-        tomorrow = datetime.combine(now.date() + timedelta(days=1), time(0))
-        seconds = (tomorrow - now).total_seconds()  # Seconds until tomorrow (midnight)
-        await asyncio.sleep(seconds)   # Sleep until tomorrow and then the loop will start
-    while True:
-        now = datetime.utcnow() # You can do now() or a specific timezone if that matters, but I'll leave it with utcnow
-        target_time = datetime.combine(now.date(), WHEN)  # 6:00 PM today (In UTC)
+    await bot.wait_until_ready()
+    while not bot.is_closed():
+        now = datetime.utcnow()
+        WHEN = time(hour=0, minute=0, second=0)  # 12:00 AM UTC 8:00 PM EST
+        if now.time() > WHEN:
+            tomorrow = datetime.combine(now.date() + timedelta(days=1), time(0))
+            seconds = (tomorrow - now).total_seconds()
+            await asyncio.sleep(seconds)
+        target_time = datetime.combine(now.date(), WHEN)
         seconds_until_target = (target_time - now).total_seconds()
-        await asyncio.sleep(seconds_until_target)  # Sleep until we hit the target time
-        await called_once_a_day()  # Call the helper function that sends the message
-        if now.day == 1:  # If it's the first day of the month
-            await called_once_a_month()  # Call the monthly function
-        tomorrow = datetime.combine(now.date() + timedelta(days=1), time(0))
-        seconds = (tomorrow - now).total_seconds()  # Seconds until tomorrow (midnight)
-        await asyncio.sleep(seconds) # Sleep until tomorrow and then the loop will start a new iteration
+        await asyncio.sleep(seconds_until_target)
+        await called_once_a_day()
+        if now.day == 1:
+            await called_once_a_month()
 
 bot.run(DISCORDT)
