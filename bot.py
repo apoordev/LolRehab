@@ -148,7 +148,7 @@ async def background_task():
     await bot.wait_until_ready()
     while not bot.is_closed():
         now = datetime.utcnow()
-        WHEN = time(hour=0, minute=0, second=0)  # 6:00 PM UTC
+        WHEN = time(hour=0, minute=0, second=0)  # 12:00 AM UTC 8:00 PM EST
         if now.time() > WHEN:
             tomorrow = datetime.combine(now.date() + timedelta(days=1), time(0))
             seconds = (tomorrow - now).total_seconds()
