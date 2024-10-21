@@ -81,7 +81,7 @@ async def called_once_a_day():  # Fired every day
     ])
 
     channel = bot.get_guild(guild_id).get_channel(channel_id)
-    await channel.send(performance_message+"\n"+response['message']['content'])
+    await channel.send("\n"+performance_message+"\n"+response['message']['content'])
 
 async def called_once_a_month():  # Fired once a month
     await bot.wait_until_ready()
@@ -122,7 +122,7 @@ async def called_once_a_month():  # Fired once a month
         plt.close()
 
         channel = bot.get_guild(guild_id).get_channel(channel_id)
-        await channel.send(message, file=discord.File(chart_path))
+        await channel.send("\n"+message, file=discord.File(chart_path))
 
         # Remove the temporary image file
         os.remove(chart_path)
