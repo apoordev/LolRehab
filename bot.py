@@ -6,6 +6,8 @@ import discord
 from requests.exceptions import HTTPError
 from riotwatcher import RiotWatcher, LolWatcher
 from ollama import Client
+import matplotlib.pyplot as plt
+import io
 
 load_dotenv()
 DISCORDT = os.getenv('DISCORD_TOKEN')
@@ -34,6 +36,8 @@ async def on_message(message):
         return
     if message.content == '!daily':
         await called_once_a_day()
+    if message.content == '!monthly':
+        await called_once_a_month()
 
 async def called_once_a_day():  # Fired every day
     await bot.wait_until_ready()  # Make sure your guild cache is ready so the channel can be found via get_channel
@@ -85,24 +89,65 @@ async def called_once_a_day():  # Fired every day
             'content': 'Summarize the following League of Legends statistics:\n'+performance_message,
         },
     ])
-    
+
     channel = bot.get_guild(guild_id).get_channel(channel_id)
     await channel.send(performance_message+"\n"+response['message']['content'])
 
+async def called_once_a_month():
+    await bot.wait_until_ready()
+    try:
+        player = riot_watcher.account.by_riot_id(region, 'ImaHitGold2024Ok', 'Gay')
+        summoner = lol_watcher.summoner.by_puuid(region, player['puuid'])
+        league_entries = lol_watcher.league.by_summoner(region, summoner['id'])
+    except HTTPError as err:
+        print(f"Error fetching player data: {err}")
+        return
+
+    solo_queue_entry = next((entry for entry in league_entries if entry['queueType'] == 'RANKED_SOLO_5x5'), None)
+    if not solo_queue_entry:
+        await bot.get_guild(guild_id).get_channel(channel_id).send("No ranked solo queue data available for the player.")
+        return
+
+    # Generate graph
+    dates = [datetime.now() - timedelta(days=i*7) for i in range(4, -1, -1)]  # Last 5 weeks
+    lp_values = [solo_queue_entry['leaguePoints']]  # Current LP
+    for _ in range(4):
+        lp_values.insert(0, max(0, lp_values[0] - 20))  # Simulated past LP values
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(dates, lp_values, marker='o')
+    plt.title(f"Rank/ELO Changes for {player['gameName']}")
+    plt.xlabel("Date")
+    plt.ylabel("League Points (LP)")
+    plt.grid(True)
+
+    # Save plot to a buffer
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png')
+    buf.seek(0)
+
+    # Send the graph as a file
+    channel = bot.get_guild(guild_id).get_channel(channel_id)
+    await channel.send(f"Monthly rank/ELO changes for {player['gameName']}:",
+                       file=discord.File(buf, filename="rank_changes.png"))
+
 async def background_task():
     now = datetime.utcnow()
-    if now.time() > WHEN:  # Make sure loop doesn't start after {WHEN} as then it will send immediately the first time as negative seconds will make the sleep yield instantly
+    WHEN = time(hour=18, minute=0, second=0)  # 6:00 PM UTC
+    if now.time() > WHEN:
         tomorrow = datetime.combine(now.date() + timedelta(days=1), time(0))
-        seconds = (tomorrow - now).total_seconds()  # Seconds until tomorrow (midnight)
-        await asyncio.sleep(seconds)   # Sleep until tomorrow and then the loop will start
+        seconds = (tomorrow - now).total_seconds()
+        await asyncio.sleep(seconds)
     while True:
-        now = datetime.utcnow() # You can do now() or a specific timezone if that matters, but I'll leave it with utcnow
-        target_time = datetime.combine(now.date(), WHEN)  # 6:00 PM today (In UTC)
+        now = datetime.utcnow()
+        target_time = datetime.combine(now.date(), WHEN)
         seconds_until_target = (target_time - now).total_seconds()
-        await asyncio.sleep(seconds_until_target)  # Sleep until we hit the target time
-        await called_once_a_day()  # Call the helper function that sends the message
+        await asyncio.sleep(seconds_until_target)
+        await called_once_a_day()
+        if now.day == 1:  # First day of the month
+            await called_once_a_month()
         tomorrow = datetime.combine(now.date() + timedelta(days=1), time(0))
-        seconds = (tomorrow - now).total_seconds()  # Seconds until tomorrow (midnight)
-        await asyncio.sleep(seconds) # Sleep until tomorrow and then the loop will start a new iteration
+        seconds = (tomorrow - now).total_seconds()
+        await asyncio.sleep(seconds)
 
 bot.run(DISCORDT)
