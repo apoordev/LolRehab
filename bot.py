@@ -54,8 +54,8 @@ async def called_once_a_day():  # Fired every day
     for match_id in match_ids:
         match_detail = lol_watcher.match.by_id(lolregion, match_id)
 
-        # Check if the match is a ranked game
-        if match_detail['info']['queueId'] == 420:  # 420 is the queue ID for ranked solo/duo
+        # Check if the match is a ranked game and longer than 10 minutes
+        if match_detail['info']['queueId'] == 420 and match_detail['info']['gameDuration'] > 600:  # 420 is the queue ID for ranked solo/duo, 600 seconds = 10 minutes
             # Find the player in the match
             for participant in match_detail['info']['participants']:
                 if participant['puuid'] == player['puuid']:
@@ -69,9 +69,9 @@ async def called_once_a_day():  # Fired every day
                     break
 
     if performance_summary:
-        performance_message = f"{player['gameName']}'s performance in the last 24 hours:\n" + "\n".join(performance_summary)
+        performance_message = f"{player['gameName']}'s performance in the last 24 hours (games longer than 10 minutes):\n" + "\n".join(performance_summary)
     else:
-        performance_message = "No games played in the last 24 hours."
+        performance_message = "No games longer than 10 minutes played in the last 24 hours."
 
     response = ollclient.chat(model='llama3.1', messages=[
         {
