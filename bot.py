@@ -13,6 +13,7 @@ DISCORDT = os.getenv('DISCORD_TOKEN')
 RIOTT = os.getenv('RIOT_TOKEN')
 guild_id = int(os.getenv('GUILDID'))
 channel_id = int(os.getenv('CHANNELID'))
+user_id = (os.getenv('USER')).split('#')
 lol_watcher = LolWatcher(RIOTT)
 riot_watcher = RiotWatcher(RIOTT)
 region = 'AMERICAS'
@@ -42,7 +43,7 @@ async def on_message(message):
 async def called_once_a_day():  # Fired every day
     await bot.wait_until_ready()  # Make sure your guild cache is ready so the channel can be found via get_channel
     try:
-        player = riot_watcher.account.by_riot_id(region, 'ImaHitGold2024Ok', 'Gay')
+        player = riot_watcher.account.by_riot_id(region, "user_id[0]", "user_id[1]")
     except HTTPError as err:
         return print(f"Error fetching player data: {err}")
 
@@ -76,7 +77,7 @@ async def called_once_a_day():  # Fired every day
     response = ollclient.chat(model='llama3.1', messages=[
         {
             'role': 'user',
-            'content': 'Summarize the following League of Legends statistics:\n'+performance_message,
+            'content': 'Summarize the following League of Legends statistics and critique them:\n'+performance_message,
         },
     ])
 
@@ -86,7 +87,7 @@ async def called_once_a_day():  # Fired every day
 async def called_once_a_month():  # Fired once a month
     await bot.wait_until_ready()
     try:
-        player = riot_watcher.account.by_riot_id(region, 'ImaHitGold2024Ok', 'Gay')
+        player = riot_watcher.account.by_riot_id(region, 'user_id[0]', 'user_id[1]')
     except HTTPError as err:
         return print(f"Error fetching player data: {err}")
 
