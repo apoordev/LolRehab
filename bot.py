@@ -48,11 +48,9 @@ async def called_once_a_day():  # Fired every day
             quit()
         else:
             raise
-    puuid = player['puuid']
-    now = datetime.now()
-    past_24_hours = now - timedelta(hours=24)
+    past_24_hours = datetime.now() - timedelta(hours=24)
     # Get match IDs for the past 24 hours
-    match_ids = lol_watcher.match.matchlist_by_puuid(region, puuid, start_time=int(past_24_hours.timestamp()))
+    match_ids = lol_watcher.match.matchlist_by_puuid(region, player['puuid'], start_time=int(past_24_hours.timestamp()))
     # Fetch and process each match
     performance_summary = []
     for match_id in match_ids:
@@ -60,7 +58,7 @@ async def called_once_a_day():  # Fired every day
 
         # Find the player in the match
         for participant in match_detail['info']['participants']:
-            if participant['puuid'] == puuid:
+            if participant['puuid'] == player['puuid']:
                 champion = participant['championName']
                 kills = participant['kills']
                 deaths = participant['deaths']
@@ -72,7 +70,7 @@ async def called_once_a_day():  # Fired every day
 
     # Prepare the performance message
     if performance_summary:
-        performance_message = f"Player's performance in the last 24 hours:\n" + "\n".join(performance_summary)
+        performance_message = f"{player['gameName']}'s performance in the last 24 hours:\n" + "\n".join(performance_summary)
     else:
         performance_message = "No games played in the last 24 hours." 
     channel = bot.get_guild(guild_id).get_channel(channel_id)
