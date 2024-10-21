@@ -4,7 +4,7 @@ from datetime import datetime, time, timedelta
 import asyncio
 import discord
 from requests.exceptions import HTTPError
-from riotwatcher import RiotWatcher, LolWatcher
+from riotwatcher import RiotWatcher
 from ollama import Client
 import matplotlib.pyplot as plt
 import io
@@ -14,7 +14,6 @@ DISCORDT = os.getenv('DISCORD_TOKEN')
 RIOTT = os.getenv('RIOT_TOKEN')
 guild_id = int(os.getenv('GUILDID'))
 channel_id = int(os.getenv('CHANNELID'))
-lol_watcher = LolWatcher(RIOTT)
 riot_watcher = RiotWatcher(RIOTT)
 region = 'AMERICAS'
 
@@ -97,8 +96,8 @@ async def called_once_a_month():
     await bot.wait_until_ready()
     try:
         player = riot_watcher.account.by_riot_id(region, 'ImaHitGold2024Ok', 'Gay')
-        summoner = lol_watcher.summoner.by_puuid(region, player['puuid'])
-        league_entries = lol_watcher.league.by_summoner(region, summoner['id'])
+        summoner = riot_watcher.summoner.by_puuid(region, player['puuid'])
+        league_entries = riot_watcher.league.by_summoner(region, summoner['id'])
     except HTTPError as err:
         print(f"Error fetching player data: {err}")
         return
