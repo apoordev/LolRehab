@@ -85,8 +85,7 @@ async def called_once_a_day():  # Fired every day
             'content': 'Summarize the following League of Legends statistics:\n'+performance_message,
         },
     ])
-
-    print(response)
+    
     channel = bot.get_guild(guild_id).get_channel(channel_id)
     await channel.send(performance_message+"\n"+response['message']['content'])
 
