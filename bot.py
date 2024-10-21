@@ -94,41 +94,7 @@ async def called_once_a_day():  # Fired every day
 
 async def called_once_a_month():
     await bot.wait_until_ready()
-    try:
-        player = riot_watcher.account.by_riot_id(region, 'ImaHitGold2024Ok', 'Gay')
-        summoner = riot_watcher.summoner.by_puuid(region, player['puuid'])
-        league_entries = riot_watcher.league.by_summoner(region, summoner['id'])
-    except HTTPError as err:
-        print(f"Error fetching player data: {err}")
-        return
 
-    solo_queue_entry = next((entry for entry in league_entries if entry['queueType'] == 'RANKED_SOLO_5x5'), None)
-    if not solo_queue_entry:
-        await bot.get_guild(guild_id).get_channel(channel_id).send("No ranked solo queue data available for the player.")
-        return
-
-    # Generate graph
-    dates = [datetime.now() - timedelta(days=i*7) for i in range(4, -1, -1)]  # Last 5 weeks
-    lp_values = [solo_queue_entry['leaguePoints']]  # Current LP
-    for _ in range(4):
-        lp_values.insert(0, max(0, lp_values[0] - 20))  # Simulated past LP values
-
-    plt.figure(figsize=(10, 6))
-    plt.plot(dates, lp_values, marker='o')
-    plt.title(f"Rank/ELO Changes for {player['gameName']}")
-    plt.xlabel("Date")
-    plt.ylabel("League Points (LP)")
-    plt.grid(True)
-
-    # Save plot to a buffer
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png')
-    buf.seek(0)
-
-    # Send the graph as a file
-    channel = bot.get_guild(guild_id).get_channel(channel_id)
-    await channel.send(f"Monthly rank/ELO changes for {player['gameName']}:",
-                       file=discord.File(buf, filename="rank_changes.png"))
 
 async def background_task():
     now = datetime.utcnow()
