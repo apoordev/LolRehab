@@ -159,25 +159,40 @@ async def called_once_a_day():  # Fired every day
         try:
             print("Generating Groq response...")
             response = gclient.chat.completions.create(
+                model="llama-3.1-8b-instant",
                 messages=[
                     {
+                        "role": "system",
+                        "content": "You are Faker a League of Legends pro who only speaks Korean and likes to insult the skill of"+user_id[0]
+                    },
+                    {
                         "role": "user",
-                        "content": 'You are Faker a League of Legends pro who only speaks Korean and likes to insult the skill of '+user_id[0]+'. Keep your response to arround a paragraph and translate your response to English. Here is '+user_id[0]+'\'s League of Legends statistics:'+concise_performance_message,
+                        "content": "Critique "+user_id[0]+"'s League of Legends statistics. Keep your response to arround a paragraph and translate your response to English:"+concise_performance_message
                     }
                 ],
-                model="llama3.1-70b-versatile",
+                temperature=1,
+                max_tokens=1024,
+                top_p=1,
+                stream=False,
+                stop=None,
             )
-        except:
-            print("Generating ollama response...")
+            print("Sending LLM response...")
+            await channel.send(response.choices[0].message.content)
+        except Exception as e:
+            print(e)
+            print("Groq failed... Generating ollama response...")
             response = ollclient.chat(model='llama3.1:latest', messages=[
-                {
-                    'role': 'user',
-                    'content': 'You are Faker a League of Legends pro who only speaks Korean and likes to insult the skill of '+user_id[0]+'. Keep your response to arround a paragraph and translate your response to English. Here is '+user_id[0]+'\'s League of Legends statistics:'+concise_performance_message,
-                },
+                    {
+                        "role": "system",
+                        "content": "You are Faker a League of Legends pro who only speaks Korean and likes to insult the skill of"+user_id[0]
+                    },
+                    {
+                        "role": "user",
+                        "content": "Critique "+user_id[0]+"'s League of Legends statistics. Keep your response to arround a paragraph and translate your response to English:"+concise_performance_message
+                    }
             ])
-
-        print("Sending LLM response...")
-        await channel.send(response['message']['content'])
+            print("Sending LLM response...")
+            await channel.send(response['message']['content'])
     else:
         print("No perfomance data for "+user_id[0]+".")
         await channel.send(user_id[0]+" did not play any ranked games today.")
