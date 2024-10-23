@@ -6,6 +6,7 @@ import discord
 from requests.exceptions import HTTPError
 from riotwatcher import RiotWatcher, LolWatcher
 from ollama import Client
+from groq import Groq
 import matplotlib.pyplot as plt
 
 load_dotenv()
@@ -20,6 +21,7 @@ region = 'AMERICAS'
 lolregion = 'na1'
 
 ollclient = Client(host=os.getenv('OLLAMA_HOST'))
+gclient = Groq(api_key=os.getenv('GROQ_TOKEN'))
 
 bot = discord.Client(intents=discord.Intents.all())
 
@@ -71,7 +73,13 @@ async def called_once_a_day():  # Fired every day
                     assists = participant['assists']
                     win = participant['win']
                     cs = participant['totalMinionsKilled'] + participant['neutralMinionsKilled']
-                    vision_score = participant['visionScore']
+                    lane = participant['teamPosition']
+                    # Find enemy laner
+                    enemy_champion = ""
+                    for enemy in match_detail['info']['participants']:
+                        if enemy['teamPosition'] == lane and enemy['teamId'] != participant['teamId']:
+                            enemy_champion = enemy['championName']
+                            break
                     game_duration = match_detail['info']['gameDuration'] // 60  # Convert to minutes
                     game_timestamp = datetime.fromtimestamp(match_detail['info']['gameCreation'] / 1000)
 
@@ -82,18 +90,19 @@ async def called_once_a_day():  # Fired every day
                     )
                     embed.add_field(name="KDA", value=f"{kills}/{deaths}/{assists} ({((kills + assists) / max(1, deaths)):.2f})", inline=False)
                     embed.add_field(name="CS", value=f"{cs} ({cs / game_duration:.1f}/min)", inline=True)
-                    embed.add_field(name="Vision Score", value=str(vision_score), inline=True)
+                    embed.add_field(name="Lane/Matchup", value=f"{lane} vs {enemy_champion}", inline=True)
                     embed.timestamp = game_timestamp
 
                     performance_summary.append(embed)
 
                     concise_game_data.append({
+                        'time': game_timestamp,
                         'champion': champion,
                         'result': 'Victory' if win else 'Defeat',
                         'duration': game_duration,
                         'kda': f"{kills}/{deaths}/{assists}",
                         'cs': f"{cs} ({cs / game_duration:.1f}/min)",
-                        'vision_score': vision_score
+                        'lane_matchup': f"{lane} vs {enemy_champion}"
                     })
                     break
 
@@ -101,18 +110,31 @@ async def called_once_a_day():  # Fired every day
 
     if performance_summary:
         print("Sending performance summary...")
-        await channel.send(f"**{player['gameName']}'s performance in the last 24 hours (games longer than 10 minutes):**")
         for embed in performance_summary:
             await channel.send(embed=embed)
+        
+        concise_performance_message = "\n".join([f"Start: {game['time']} Champ: {game['champion']} Result: {game['result']} Duration: {game['duration']} minutes KDA: {game['kda']} CS: {game['cs']} Lane/Matchup: {game['lane_matchup']}" for game in concise_game_data])
+        
+        try:
+            print("Generating Groq response...")
+            response = gclient.chat.completions.create(
+                messages=[
+                    {
+                        "role": "user",
+                        "content": 'You are Faker a League of Legends pro who only speaks Korean and likes to insult the skill of '+user_id[0]+'. Keep your response to arround a paragraph and translate your response to broken English. Here is '+user_id[0]+'\'s League of Legends statistics:'+concise_performance_message,
+                    }
+                ],
+                model="llama3.1-70b-versatile",
+            )
+        except:
+            print("Generating ollama response...")
+            response = ollclient.chat(model='llama3.1:latest', messages=[
+                {
+                    'role': 'user',
+                    'content': 'You are Faker a League of Legends pro who only speaks Korean and likes to insult the skill of '+user_id[0]+'. Keep your response to arround a paragraph and translate your response to broken English. Here is '+user_id[0]+'\'s League of Legends statistics:'+concise_performance_message,
+                },
+            ])
 
-        concise_performance_message = "\n".join([f"{game['champion']} - {game['result']}\nDuration: {game['duration']} minutes\nKDA: {game['kda']}\nCS: {game['cs']}\nVision Score: {game['vision_score']}" for game in concise_game_data])
-        print("Generating LLM response...")
-        response = ollclient.chat(model='llama3.1', messages=[
-            {
-                'role': 'user',
-                'content': 'You are Faker a League of Legends pro who insults the skill of the given player. Keep your response to arround a paragraph long.\nCritique '+user_id[0]+'\'s League of Legends statistics:\n'+concise_performance_message,
-            },
-        ])
         print("Sending LLM response...")
         await channel.send(response['message']['content'])
     else:

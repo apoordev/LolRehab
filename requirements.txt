@@ -3,3 +3,4 @@ riotwatcher
 python-dotenv
 matplotlib
 ollama
+groq
