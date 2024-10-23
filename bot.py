@@ -31,6 +31,7 @@ async def on_ready():
     print('------')
     print('Starting background task...')
     bot.loop.create_task(background_task())  # Start the background task when the bot is ready
+    print('Task started.')
 
 @bot.event
 async def on_message(message):
