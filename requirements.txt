@@ -1,6 +1,7 @@
 discord.py
 riotwatcher
 python-dotenv
+pytz
 matplotlib
 ollama
 groq

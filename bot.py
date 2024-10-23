@@ -7,6 +7,7 @@ from requests.exceptions import HTTPError
 from riotwatcher import RiotWatcher, LolWatcher
 from ollama import Client
 from groq import Groq
+import pytz
 import matplotlib.pyplot as plt
 
 load_dotenv()
@@ -17,8 +18,9 @@ channel_id = int(os.getenv('CHANNELID'))
 user_id = os.getenv('LOLUSER').split('#')
 lol_watcher = LolWatcher(RIOTT)
 riot_watcher = RiotWatcher(RIOTT)
-region = 'AMERICAS'
-lolregion = 'na1'
+tz = pytz.timezone(os.getenv('TIMEZONE'))
+region = os.getenv('REGION')
+lolregion = os.getenv('SERVERS')
 
 ollclient = Client(host=os.getenv('OLLAMA_HOST'))
 gclient = Groq(api_key=os.getenv('GROQ_TOKEN'))
@@ -57,7 +59,8 @@ async def called_once_a_day():  # Fired every day
     # Get match IDs for the past 24 hours
     match_ids = lol_watcher.match.matchlist_by_puuid(lolregion, player['puuid'], start_time=int(past_24_hours.timestamp()), queue=420)  # 420 is the queue ID for ranked solo/duo
     # Fetch and process each match
-    performance_summary = []
+    wins_data = []
+    losses_data = []
     concise_game_data = []
     for match_id in match_ids:
         match_detail = lol_watcher.match.by_id(lolregion, match_id)
@@ -83,17 +86,23 @@ async def called_once_a_day():  # Fired every day
                     game_duration = match_detail['info']['gameDuration'] // 60  # Convert to minutes
                     game_timestamp = datetime.fromtimestamp(match_detail['info']['gameCreation'] / 1000)
 
-                    embed = discord.Embed(
-                        title=f"{champion} - {'Victory' if win else 'Defeat'}",
-                        description=f"Game Duration: {game_duration} minutes",
-                        color=discord.Color.green() if win else discord.Color.red()
-                    )
-                    embed.add_field(name="KDA", value=f"{kills}/{deaths}/{assists} ({((kills + assists) / max(1, deaths)):.2f})", inline=False)
-                    embed.add_field(name="CS", value=f"{cs} ({cs / game_duration:.1f}/min)", inline=True)
-                    embed.add_field(name="Lane/Matchup", value=f"{lane} vs {enemy_champion}", inline=True)
-                    embed.timestamp = game_timestamp
+                    game_data = {
+                        'champion': champion,
+                        'kills': kills,
+                        'deaths': deaths,
+                        'assists': assists,
+                        'cs': cs,
+                        'lane': lane,
+                        'enemy': enemy_champion,
+                        'duration': game_duration,
+                        'timestamp': game_timestamp,
+                        'kda_ratio': ((kills + assists) / max(1, deaths))
+                    }
 
-                    performance_summary.append(embed)
+                    if win:
+                        wins_data.append(game_data)
+                    else:
+                        losses_data.append(game_data)
 
                     concise_game_data.append({
                         'time': game_timestamp,
@@ -108,20 +117,52 @@ async def called_once_a_day():  # Fired every day
 
     channel = bot.get_guild(guild_id).get_channel(channel_id)
 
-    if performance_summary:
+    if wins_data or losses_data:
         print("Sending performance summary...")
-        for embed in performance_summary:
-            await channel.send(embed=embed)
-        
+
+        if wins_data:
+            wins_embed = discord.Embed(
+                title="Victories",
+                description=f"Total Wins: {len(wins_data)}",
+                color=discord.Color.green()
+            )
+            for game in wins_data:
+                wins_embed.add_field(
+                    name=f"{game['champion']} - {game['duration']}min",
+                    value=f"KDA: {game['kills']}/{game['deaths']}/{game['assists']} ({game['kda_ratio']:.2f})\n"
+                          f"CS: {game['cs']} ({game['cs']/game['duration']:.1f}/min)\n"
+                          f"Lane: {game['lane']} vs {game['enemy']}\n"
+                          f"Time: {game['timestamp'].astimezone(tz).strftime('%I:%M %p')}",
+                    inline=False
+                )
+            await channel.send(embed=wins_embed)
+
+        if losses_data:
+            losses_embed = discord.Embed(
+                title="Defeats",
+                description=f"Total Losses: {len(losses_data)}",
+                color=discord.Color.red()
+            )
+            for game in losses_data:
+                losses_embed.add_field(
+                    name=f"{game['champion']} - {game['duration']}min",
+                    value=f"KDA: {game['kills']}/{game['deaths']}/{game['assists']} ({game['kda_ratio']:.2f})\n"
+                          f"CS: {game['cs']} ({game['cs']/game['duration']:.1f}/min)\n"
+                          f"Lane: {game['lane']} vs {game['enemy']}\n"
+                          f"Time: {game['timestamp'].astimezone(tz).strftime('%I:%M %p')}",
+                    inline=False
+                )
+            await channel.send(embed=losses_embed)
+
         concise_performance_message = "\n".join([f"Start: {game['time']} Champ: {game['champion']} Result: {game['result']} Duration: {game['duration']} minutes KDA: {game['kda']} CS: {game['cs']} Lane/Matchup: {game['lane_matchup']}" for game in concise_game_data])
-        
+
         try:
             print("Generating Groq response...")
             response = gclient.chat.completions.create(
                 messages=[
                     {
                         "role": "user",
-                        "content": 'You are Faker a League of Legends pro who only speaks Korean and likes to insult the skill of '+user_id[0]+'. Keep your response to arround a paragraph and translate your response to broken English. Here is '+user_id[0]+'\'s League of Legends statistics:'+concise_performance_message,
+                        "content": 'You are Faker a League of Legends pro who only speaks Korean and likes to insult the skill of '+user_id[0]+'. Keep your response to arround a paragraph and translate your response to English. Here is '+user_id[0]+'\'s League of Legends statistics:'+concise_performance_message,
                     }
                 ],
                 model="llama3.1-70b-versatile",
@@ -131,7 +172,7 @@ async def called_once_a_day():  # Fired every day
             response = ollclient.chat(model='llama3.1:latest', messages=[
                 {
                     'role': 'user',
-                    'content': 'You are Faker a League of Legends pro who only speaks Korean and likes to insult the skill of '+user_id[0]+'. Keep your response to arround a paragraph and translate your response to broken English. Here is '+user_id[0]+'\'s League of Legends statistics:'+concise_performance_message,
+                    'content': 'You are Faker a League of Legends pro who only speaks Korean and likes to insult the skill of '+user_id[0]+'. Keep your response to arround a paragraph and translate your response to English. Here is '+user_id[0]+'\'s League of Legends statistics:'+concise_performance_message,
                 },
             ])
 
