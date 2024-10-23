@@ -71,21 +71,31 @@ async def called_once_a_day():  # Fired every day
                     cs = participant['totalMinionsKilled'] + participant['neutralMinionsKilled']
                     vision_score = participant['visionScore']
                     game_duration = match_detail['info']['gameDuration'] // 60  # Convert to minutes
+                    game_timestamp = datetime.fromtimestamp(match_detail['info']['gameCreation'] / 1000)
 
-                    performance_summary.append(
-                        f"```md\n"
-                        f"# {champion} - {'Victory' if win else 'Defeat'} ({game_duration} min)\n"
-                        f"## KDA: {kills}/{deaths}/{assists} ({((kills + assists) / max(1, deaths)):.2f})\n"
-                        f"* CS: {cs} ({cs / game_duration:.1f}/min)\n"
-                        f"* Vision Score: {vision_score}\n"
-                        f"```"
+                    embed = discord.Embed(
+                        title=f"{champion} - {'Victory' if win else 'Defeat'}",
+                        description=f"Game Duration: {game_duration} minutes",
+                        color=discord.Color.green() if win else discord.Color.red()
                     )
+                    embed.add_field(name="KDA", value=f"{kills}/{deaths}/{assists} ({((kills + assists) / max(1, deaths)):.2f})", inline=False)
+                    embed.add_field(name="CS", value=f"{cs} ({cs / game_duration:.1f}/min)", inline=True)
+                    embed.add_field(name="Vision Score", value=str(vision_score), inline=True)
+                    embed.timestamp = game_timestamp
+
+                    performance_summary.append(embed)
                     break
 
+    channel = bot.get_guild(guild_id).get_channel(channel_id)
+
     if performance_summary:
-        performance_message = f"**{player['gameName']}'s performance in the last 24 hours (games longer than 10 minutes):**\n" + "\n".join(performance_summary)
+        await channel.send(f"**{player['gameName']}'s performance in the last 24 hours (games longer than 10 minutes):**")
+        for embed in performance_summary:
+            await channel.send(embed=embed)
     else:
-        performance_message = "No games longer than 10 minutes played in the last 24 hours."
+        await channel.send("No games longer than 10 minutes played in the last 24 hours.")
+
+    performance_message = "\n".join([f"{embed.title}\n{embed.description}\n" + "\n".join([f"{field.name}: {field.value}" for field in embed.fields]) for embed in performance_summary])
 
     response = ollclient.chat(model='llama3.1', messages=[
         {
@@ -94,8 +104,6 @@ async def called_once_a_day():  # Fired every day
         },
     ])
 
-    channel = bot.get_guild(guild_id).get_channel(channel_id)
-    await channel.send(performance_message)
     await channel.send(response['message']['content'])
 
 async def called_once_a_month():  # Fired once a month
@@ -149,7 +157,7 @@ async def background_task():
     await bot.wait_until_ready()
     while not bot.is_closed():
         now = datetime.utcnow()
-        WHEN = time(hour=4, minute=0, second=0)  # 12:00 AM EST 
+        WHEN = time(hour=4, minute=0, second=0)  # 12:00 AM EST
         if now.time() > WHEN:
             tomorrow = datetime.combine(now.date() + timedelta(days=1), time(0))
             seconds = (tomorrow - now).total_seconds()
