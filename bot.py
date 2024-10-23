@@ -47,6 +47,7 @@ async def called_once_a_day():  # Fired every day
     await bot.wait_until_ready()  # Make sure your guild cache is ready so the channel can be found via get_channel
     try:
         player = riot_watcher.account.by_riot_id(region, user_id[0], user_id[1])
+        print("Pulled player data!")
     except HTTPError as err:
         return print(f"Error fetching player data: {err}")
 
@@ -55,6 +56,7 @@ async def called_once_a_day():  # Fired every day
     match_ids = lol_watcher.match.matchlist_by_puuid(lolregion, player['puuid'], start_time=int(past_24_hours.timestamp()), queue=420)  # 420 is the queue ID for ranked solo/duo
     # Fetch and process each match
     performance_summary = []
+    concise_game_data = []
     for match_id in match_ids:
         match_detail = lol_watcher.match.by_id(lolregion, match_id)
 
@@ -84,32 +86,44 @@ async def called_once_a_day():  # Fired every day
                     embed.timestamp = game_timestamp
 
                     performance_summary.append(embed)
+
+                    concise_game_data.append({
+                        'champion': champion,
+                        'result': 'Victory' if win else 'Defeat',
+                        'duration': game_duration,
+                        'kda': f"{kills}/{deaths}/{assists}",
+                        'cs': f"{cs} ({cs / game_duration:.1f}/min)",
+                        'vision_score': vision_score
+                    })
                     break
 
     channel = bot.get_guild(guild_id).get_channel(channel_id)
 
     if performance_summary:
+        print("Sending performance summary...")
         await channel.send(f"**{player['gameName']}'s performance in the last 24 hours (games longer than 10 minutes):**")
         for embed in performance_summary:
             await channel.send(embed=embed)
+
+        concise_performance_message = "\n".join([f"{game['champion']} - {game['result']}\nDuration: {game['duration']} minutes\nKDA: {game['kda']}\nCS: {game['cs']}\nVision Score: {game['vision_score']}" for game in concise_game_data])
+        print("Generating LLM response...")
+        response = ollclient.chat(model='llama3.1', messages=[
+            {
+                'role': 'user',
+                'content': 'You are Faker a League of Legends pro who insults the skill of the given player. Keep your response to arround a paragraph long.\nCritique '+user_id[0]+'\'s League of Legends statistics:\n'+concise_performance_message,
+            },
+        ])
+        print("Sending LLM response...")
+        await channel.send(response['message']['content'])
     else:
-        await channel.send("No games longer than 10 minutes played in the last 24 hours.")
-
-    performance_message = "\n".join([f"{embed.title}\n{embed.description}\n" + "\n".join([f"{field.name}: {field.value}" for field in embed.fields]) for embed in performance_summary])
-
-    response = ollclient.chat(model='llama3.1', messages=[
-        {
-            'role': 'user',
-            'content': 'Summarize the following League of Legends statistics and critique them:\n'+performance_message,
-        },
-    ])
-
-    await channel.send(response['message']['content'])
+        print("No perfomance data for "+user_id[0]+".")
+        await channel.send(user_id[0]+" did not play any ranked games today.")
 
 async def called_once_a_month():  # Fired once a month
     await bot.wait_until_ready()
     try:
         player = riot_watcher.account.by_riot_id(region, user_id[0], user_id[1])
+        print("Pulled player data!")
     except HTTPError as err:
         return print(f"Error fetching player data: {err}")
 
@@ -134,6 +148,7 @@ async def called_once_a_month():  # Fired once a month
         message += f"Win Rate: {wins / (wins + losses) * 100:.2f}%"
 
         # Create a pie chart
+        print("Creating pie chart...")
         plt.figure(figsize=(8, 8))
         plt.pie([wins, losses], labels=['Wins', 'Losses'], autopct='%1.1f%%', startangle=90)
         plt.title(f"{player['gameName']}'s Win/Loss Ratio")
@@ -145,6 +160,7 @@ async def called_once_a_month():  # Fired once a month
         plt.close()
 
         channel = bot.get_guild(guild_id).get_channel(channel_id)
+        print("Sending pie chart...")
         await channel.send("\n"+message, file=discord.File(chart_path))
 
         # Remove the temporary image file
