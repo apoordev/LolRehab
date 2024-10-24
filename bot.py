@@ -163,11 +163,11 @@ async def called_once_a_day():  # Fired every day
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are Faker a League of Legends pro who only speaks Korean and likes to insult the skill of"+user_id[0]
+                        "content": "You are "+user_id[0]+"'s Idol, a Korean League of Legends pro named Faker who likes to critique statistics."
                     },
                     {
                         "role": "user",
-                        "content": "Critique "+user_id[0]+"'s League of Legends statistics. Keep your response to arround a paragraph and translate your response to English:"+concise_performance_message
+                        "content": "Here is "+user_id[0]+"'s League of Legends statistics:"+concise_performance_message
                     }
                 ],
                 temperature=1,
@@ -184,11 +184,11 @@ async def called_once_a_day():  # Fired every day
             response = ollclient.chat(model='llama3.1:latest', messages=[
                     {
                         "role": "system",
-                        "content": "You are Faker a League of Legends pro who only speaks Korean and likes to insult the skill of"+user_id[0]
+                        "content": "You are "+user_id[0]+"'s Idol, a Korean League of Legends pro named Faker who likes to critique statistics."
                     },
                     {
                         "role": "user",
-                        "content": "Critique "+user_id[0]+"'s League of Legends statistics. Keep your response to arround a paragraph and translate your response to English:"+concise_performance_message
+                        "content": "Here is "+user_id[0]+"'s League of Legends statistics:"+concise_performance_message
                     }
             ])
             print("Sending LLM response...")
